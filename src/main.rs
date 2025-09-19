@@ -12,7 +12,7 @@ use aptos_indexer_processor_sdk::{
 };
 use async_trait::async_trait;
 use clap::Parser;
-use events::{classify_event, extract_events_from_transaction, EventType};
+use events::{classify_event_full, extract_events_from_transaction, KnownEvent};
 use std::path::PathBuf;
 use tracing::{info, Level};
 
@@ -34,6 +34,8 @@ struct Config {
     pub ending_version: Option<u64>,
     /// Package address to filter events for
     pub package_address: String,
+    /// Auth token for GRPC endpoint (required for staging/private endpoints)
+    pub auth_token: Option<String>,
 }
 
 impl Default for Config {
@@ -43,6 +45,7 @@ impl Default for Config {
             starting_version: Some(0),
             ending_version: None,
             package_address: "0x1".to_string(),
+            auth_token: None,
         }
     }
 }
@@ -111,6 +114,16 @@ async fn main() -> Result<()> {
         config.indexer_grpc_data_service_address
     );
 
+    if let Some(ref token) = config.auth_token {
+        if !token.is_empty() {
+            info!("Using auth token: {}***", &token[..token.len().min(8)]);
+        } else {
+            info!("No auth token (using public endpoint)");
+        }
+    } else {
+        info!("No auth token (using public endpoint)");
+    }
+
     if let Some(start) = config.starting_version {
         info!("Starting from version: {}", start);
     }
@@ -128,7 +141,7 @@ async fn run_processor(config: Config) -> Result<()> {
         indexer_grpc_data_service_address: config.indexer_grpc_data_service_address.parse()?,
         starting_version: config.starting_version,
         request_ending_version: config.ending_version,
-        auth_token: "".to_string(),
+        auth_token: config.auth_token.unwrap_or_default(),
         request_name_header: "decibel-indexer-example".to_string(),
         additional_headers: Default::default(),
         indexer_grpc_http2_ping_interval_secs: 60,
@@ -178,7 +191,11 @@ fn process_transactions(transactions: Vec<Transaction>, package_addr: &str) -> R
     let mut order_events = 0;
     let mut trade_events = 0;
     let mut market_events = 0;
-    let mut unknown_events = 0;
+    let mut position_events = 0;
+    let mut price_events = 0;
+    let mut collateral_events = 0;
+    let mut dex_events = 0;
+    let mut subaccount_events = 0;
 
     for transaction in &transactions {
         let events = extract_events_from_transaction(transaction);
@@ -186,27 +203,32 @@ fn process_transactions(transactions: Vec<Transaction>, package_addr: &str) -> R
         for event in events {
             total_events += 1;
 
-            match classify_event(&event, package_addr) {
-                Some(EventType::OrderEvent(order)) => {
+            match classify_event_full(&event, package_addr) {
+                KnownEvent::OrderEvent(_order) => {
                     order_events += 1;
-                    info!(user = order.user, market = order.market, "Found OrderEvent");
                 }
-                Some(EventType::TradeEvent(trade)) => {
+                KnownEvent::TradeEvent(_trade) => {
                     trade_events += 1;
-                    info!(
-                        account = trade.account,
-                        market = trade.market,
-                        "Found TradeEvent"
-                    );
                 }
-                Some(EventType::MarketRegistrationEvent(market)) => {
+                KnownEvent::MarketRegistrationEvent(_market) => {
                     market_events += 1;
-                    info!(market = market.market, "Found MarketRegistrationEvent");
                 }
-                None => {
-                    unknown_events += 1;
-                    info!(event_type = event.type_, "Unknown event type");
+                KnownEvent::PositionUpdateEvent(_position) => {
+                    position_events += 1;
                 }
+                KnownEvent::PriceUpdateEvent(_price) => {
+                    price_events += 1;
+                }
+                KnownEvent::CollateralBalanceChangeEvent(_collateral) => {
+                    collateral_events += 1;
+                }
+                KnownEvent::DexRegistrationEvent(_dex) => {
+                    dex_events += 1;
+                }
+                KnownEvent::SubaccountCreatedEvent(_subaccount) => {
+                    subaccount_events += 1;
+                }
+                KnownEvent::Unknown(_) => {}
             }
         }
     }
@@ -217,7 +239,11 @@ fn process_transactions(transactions: Vec<Transaction>, package_addr: &str) -> R
             order_events = order_events,
             trade_events = trade_events,
             market_events = market_events,
-            unknown_events = unknown_events,
+            position_events = position_events,
+            price_events = price_events,
+            collateral_events = collateral_events,
+            dex_events = dex_events,
+            subaccount_events = subaccount_events,
             "Processed event batch"
         );
     }

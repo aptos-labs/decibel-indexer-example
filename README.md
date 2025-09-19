@@ -32,6 +32,9 @@ ending_version: null
 
 # Package address to filter events for
 package_address: "0x1234...abcdef"
+
+# Auth token (required for staging/private endpoints, optional for mainnet)
+auth_token: "your-auth-token-here"
 ```
 
 ## Usage
@@ -45,8 +48,10 @@ package_address: "0x1234...abcdef"
    ```bash
    cd decibel-indexer-example
    cp example-config.yaml config.yaml
-   # Edit config.yaml with your package address
+   # Edit config.yaml with your package address and auth token
    ```
+
+   **Note**: For staging endpoints like `grpc.netna.staging.aptoslabs.com`, you'll need an auth token. Contact the Aptos team or check your developer console for access tokens.
 
 3. **Run the processor**:
    ```bash
@@ -55,11 +60,16 @@ package_address: "0x1234...abcdef"
 
 ## Event Types
 
-This processor recognizes the following event types (based on Etna patterns):
+This processor recognizes all the following event types from Etna:
 
-- `market_types::OrderEvent` - Order-related events
-- `perp_positions::TradeEvent` - Trade execution events  
+- `market_types::OrderEvent` - Order-related events (from 0x7 package)
+- `perp_positions::TradeEvent` - Trade execution events
 - `perp_engine::MarketRegistrationEvent` - Market registration events
+- `perp_positions::PositionUpdateEvent` - Position update events
+- `price_management::PriceUpdateEvent` - Price update events
+- `collateral_balance_sheet::CollateralBalanceChangeEvent` - Collateral balance changes
+- `perp_engine::DexRegistrationEvent` - DEX registration events
+- `dex_accounts::SubaccountCreatedEvent` - Subaccount creation events
 
 Events not matching these patterns are logged as "Unknown" events.
 
@@ -90,7 +100,9 @@ The processor logs detailed information about processed events:
 
 ```
 INFO Found OrderEvent user="0x123..." market="0x456..."
-INFO Processed event batch total_events=5 order_events=2 trade_events=1 market_events=0 unknown_events=2
+INFO Found PriceUpdateEvent market="0x456..." price="1000000"
+INFO Found PositionUpdateEvent account="0x123..." market="0x456..."
+INFO Processed event batch total_events=8 order_events=2 trade_events=1 market_events=1 position_events=2 price_events=1 collateral_events=0 dex_events=1 subaccount_events=0 unknown_events=0
 INFO Processed transactions from version 1000 to 1010
 ```
 
