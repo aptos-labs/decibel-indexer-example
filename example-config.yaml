@@ -1,0 +1,16 @@
+# Decibel Indexer Example Configuration
+
+# Aptos node GRPC endpoint for streaming transactions
+indexer_grpc_data_service_address: "https://grpc.mainnet.aptoslabs.com:443"
+
+# Starting version for indexing (optional, defaults to 0)
+# Set to null to start from the latest version
+starting_version: 0
+
+# Ending version for indexing (optional)
+# Leave null to run indefinitely
+ending_version: null
+
+# Package address to filter events for
+# Replace this with your actual package address
+package_address: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
