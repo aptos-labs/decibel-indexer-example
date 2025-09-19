@@ -10,7 +10,7 @@ Add business logic to `process_transactions` in `events.rs` for quick prototypin
 
 - `src/main.rs` - Main entry point, processor setup, and transaction processing logic 
 - `src/events.rs` - Event structures, parsing logic, and helper functions.
-- `src/decibel_object_events.rs` - Decibel specific event definitions.
+- `src/event_parsing_utils.rs` - Decibel specific event definitions.
 
 ## Usage
 1. **Clone and setup**:
