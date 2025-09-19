@@ -1,3 +1,4 @@
+mod event_parsing_utils;
 mod events;
 
 use anyhow::Result;
@@ -12,7 +13,7 @@ use aptos_indexer_processor_sdk::{
 };
 use async_trait::async_trait;
 use clap::Parser;
-use events::{classify_event_full, extract_events_from_transaction, KnownEvent};
+use event_parsing_utils::{classify_event_full, extract_events_from_transaction, KnownEvent};
 use std::path::PathBuf;
 use tracing::{info, Level};
 
@@ -26,7 +27,7 @@ struct Args {
 
 #[derive(serde::Deserialize)]
 struct Config {
-    /// Aptos node GRPC endpoint
+    /// Aptos node gRPC endpoint
     pub indexer_grpc_data_service_address: String,
     /// Starting version for indexing (optional, defaults to 0)
     pub starting_version: Option<u64>,
@@ -128,21 +129,13 @@ async fn run_processor(config: Config) -> Result<()> {
     };
 
     let processor = DecibelProcessor::new(config.package_address.clone());
-
-    info!("Building processor pipeline");
-
-    // Create processor steps
     let transaction_stream = TransactionStreamStep::new(transaction_stream_config).await?;
 
-    // Build the processor pipeline - much simpler!
     let (_, buffer_receiver) =
         ProcessorBuilder::new_with_inputless_first_step(transaction_stream.into_runnable_step())
             .connect_to(processor.into_runnable_step(), 10)
             .end_and_return_output_receiver(10);
 
-    info!("Starting transaction processing");
-
-    // Process transactions
     loop {
         match buffer_receiver.recv().await {
             Ok(txn_context) => {
@@ -162,65 +155,22 @@ async fn run_processor(config: Config) -> Result<()> {
 }
 
 fn process_transactions(transactions: Vec<Transaction>, package_addr: &str) -> Result<Vec<()>> {
-    let mut total_events = 0;
-    let mut order_events = 0;
-    let mut trade_events = 0;
-    let mut market_events = 0;
-    let mut position_events = 0;
-    let mut price_events = 0;
-    let mut collateral_events = 0;
-    let mut dex_events = 0;
-    let mut subaccount_events = 0;
-
+    // Add business logic to handle events.
     for transaction in &transactions {
         let events = extract_events_from_transaction(transaction);
-
         for event in events {
-            total_events += 1;
-
             match classify_event_full(&event, package_addr) {
-                KnownEvent::OrderEvent(_order) => {
-                    order_events += 1;
-                }
-                KnownEvent::TradeEvent(_trade) => {
-                    trade_events += 1;
-                }
-                KnownEvent::MarketRegistrationEvent(_market) => {
-                    market_events += 1;
-                }
-                KnownEvent::PositionUpdateEvent(_position) => {
-                    position_events += 1;
-                }
-                KnownEvent::PriceUpdateEvent(_price) => {
-                    price_events += 1;
-                }
-                KnownEvent::CollateralBalanceChangeEvent(_collateral) => {
-                    collateral_events += 1;
-                }
-                KnownEvent::DexRegistrationEvent(_dex) => {
-                    dex_events += 1;
-                }
-                KnownEvent::SubaccountCreatedEvent(_subaccount) => {
-                    subaccount_events += 1;
-                }
+                KnownEvent::OrderEvent(_order) => {}
+                KnownEvent::TradeEvent(_trade) => {}
+                KnownEvent::MarketRegistrationEvent(_market) => {}
+                KnownEvent::PositionUpdateEvent(_position) => {}
+                KnownEvent::PriceUpdateEvent(_price) => {}
+                KnownEvent::CollateralBalanceChangeEvent(_collateral) => {}
+                KnownEvent::DexRegistrationEvent(_dex) => {}
+                KnownEvent::SubaccountCreatedEvent(_subaccount) => {}
                 KnownEvent::Unknown(_) => {}
             }
         }
-    }
-
-    if total_events > 0 {
-        info!(
-            total_events = total_events,
-            order_events = order_events,
-            trade_events = trade_events,
-            market_events = market_events,
-            position_events = position_events,
-            price_events = price_events,
-            collateral_events = collateral_events,
-            dex_events = dex_events,
-            subaccount_events = subaccount_events,
-            "Processed event batch"
-        );
     }
 
     Ok(vec![(); transactions.len()])
