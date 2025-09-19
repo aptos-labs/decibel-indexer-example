@@ -11,10 +11,10 @@ A simple barebones processor that parses events from the Aptos blockchain, speci
 
 ## Structure
 
-- `src/main.rs` - Main entry point, processor setup, and transaction processing logic (~238 lines)
-- `src/events.rs` - Event structures, parsing logic, and helper functions (~88 lines)
+- `src/main.rs` - Main entry point, processor setup, and transaction processing logic (~227 lines)
+- `src/events.rs` - Event structures, parsing logic, and helper functions (~361 lines)
 - `example-config.yaml` - Example configuration file
-- `config.yaml` - Working configuration (not committed to git)
+- `config.yaml` - Working configuration
 
 ## Configuration
 
@@ -22,7 +22,7 @@ Copy `example-config.yaml` to `config.yaml` and update the settings:
 
 ```yaml
 # Aptos GRPC endpoint
-indexer_grpc_data_service_address: "https://grpc.mainnet.aptoslabs.com:443"
+indexer_grpc_data_service_address: "https://grpc.netna.aptoslabs.com:443"
 
 # Starting version (optional)
 starting_version: 0
@@ -30,10 +30,7 @@ starting_version: 0
 # Ending version (optional, null = run forever)
 ending_version: null
 
-# Package address to filter events for
-package_address: "0x1234...abcdef"
-
-# Auth token (required for staging/private endpoints, optional for mainnet)
+package_address: "0xb8a5788314451ce4d2fbbad32e1bad88d4184b73943b7fe5166eab93cf1a5a95"
 auth_token: "your-auth-token-here"
 ```
 
@@ -82,34 +79,4 @@ To adapt this for your own package:
    pub const ORDER_EVENT_TYPE: &str = "your_module::YourOrderEvent";
    ```
 
-2. **Update event structures** in `src/events.rs` to match your actual event data:
-   ```rust
-   #[derive(Debug, Deserialize, Clone)]
-   pub struct OrderEvent {
-       pub user: String,
-       pub market: String,
-       // Add your actual fields here
-   }
-   ```
-
-3. **Add custom processing logic** in the `process_transactions` function in `src/main.rs`
-
-## Output
-
-The processor logs detailed information about processed events:
-
-```
-INFO Found OrderEvent user="0x123..." market="0x456..."
-INFO Found PriceUpdateEvent market="0x456..." price="1000000"
-INFO Found PositionUpdateEvent account="0x123..." market="0x456..."
-INFO Processed event batch total_events=8 order_events=2 trade_events=1 market_events=1 position_events=2 price_events=1 collateral_events=0 dex_events=1 subaccount_events=0 unknown_events=0
-INFO Processed transactions from version 1000 to 1010
-```
-
-## No Database Required
-
-Unlike the Etna processor, this example doesn't require any database setup - it simply parses events and logs metadata. This makes it ideal for:
-
-- Understanding event structures
-- Testing event parsing logic
-- Building prototypes before adding database integration
+2. **Add custom processing logic** in the `process_transactions` function in `src/main.rs`

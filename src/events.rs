@@ -42,6 +42,7 @@ pub enum OrderStatusType {
 }
 // Exact OrderEvent structure from etna
 #[derive(Deserialize, Debug)]
+#[allow(dead_code)]
 pub struct OrderEvent {
     pub parent: String,
     pub market: String,
@@ -100,6 +101,7 @@ pub struct TradeEvent {
 }
 
 #[derive(Deserialize, Debug)]
+#[allow(dead_code)]
 pub struct MarketRegistrationEvent {
     pub market: Object,
     pub name: String,
@@ -115,13 +117,14 @@ pub struct Object {
 }
 
 impl Object {
+    #[allow(dead_code)]
     pub fn object_addr(self) -> String {
         standardize_address(&self.inner)
     }
 }
 
 #[derive(Debug, Deserialize, Clone)]
-
+#[allow(dead_code)]
 pub struct PositionUpdateEvent {
     pub market: Object,
     pub user: String,
@@ -145,6 +148,7 @@ pub struct PositionUpdateEvent {
     pub is_unrealized_funding_amount_before_last_update_positive: bool,
 }
 #[derive(Debug, Deserialize, Clone)]
+#[allow(dead_code)]
 pub struct PriceUpdateEvent {
     pub market: Object,
     // multiplied by the px_decimal of the collateral balance sheet.
@@ -159,7 +163,7 @@ pub struct PriceUpdateEvent {
 }
 
 #[derive(Debug, Deserialize, Clone)]
-
+#[allow(dead_code)]
 pub struct CollateralBalanceChangeEvent {
     pub balance_type: CollateralBalanceType,
     pub delta: String, // u64 as string
@@ -168,12 +172,14 @@ pub struct CollateralBalanceChangeEvent {
     pub change_type: CollateralBalanceChangeType,
 }
 #[derive(Deserialize, Debug, Clone)]
+#[allow(dead_code)]
 pub struct AggregatorSnapshot {
     pub value: String, // u64 as string
 }
 
 #[derive(Deserialize, Debug, Clone)]
 #[serde(tag = "__variant__")]
+#[allow(dead_code)]
 pub enum CollateralBalanceType {
     Cross { account: String },
     Isolated { account: String, market: Object },
@@ -189,6 +195,7 @@ pub enum CollateralBalanceChangeType {
     Liquidation,
 }
 #[derive(Debug, Deserialize, Clone)]
+#[allow(dead_code)]
 pub struct DexRegistrationEvent {
     pub dex: Object,
     pub collateral_asset: Object,
@@ -196,6 +203,7 @@ pub struct DexRegistrationEvent {
 }
 
 #[derive(Debug, Deserialize, Clone)]
+#[allow(dead_code)]
 pub struct SubaccountCreatedEvent {
     pub subaccount: String,
     pub owner: String,
@@ -204,6 +212,7 @@ pub struct SubaccountCreatedEvent {
 
 // Main Event struct similar to etna's Event
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct Event {
     pub sequence_number: i64,
     pub creation_number: i64,

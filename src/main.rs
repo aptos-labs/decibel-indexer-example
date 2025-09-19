@@ -41,10 +41,12 @@ struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            indexer_grpc_data_service_address: "https://grpc.mainnet.aptoslabs.com:443".to_string(),
+            indexer_grpc_data_service_address: "https://grpc.netna.staging.aptoslabs.com:443"
+                .to_string(),
             starting_version: Some(0),
             ending_version: None,
-            package_address: "0x1".to_string(),
+            package_address: "0xb8a5788314451ce4d2fbbad32e1bad88d4184b73943b7fe5166eab93cf1a5a95"
+                .to_string(),
             auth_token: None,
         }
     }
@@ -99,38 +101,11 @@ async fn main() -> Result<()> {
         .init();
 
     let args = Args::parse();
-
-    info!("Loading configuration from {:?}", args.config);
     let config_content = std::fs::read_to_string(&args.config)?;
     let config: Config = serde_yaml::from_str(&config_content).unwrap_or_else(|_| {
         info!("Failed to parse config, using defaults");
         Config::default()
     });
-
-    info!("Starting Decibel Events Processor");
-    info!("Package address: {}", config.package_address);
-    info!(
-        "GRPC endpoint: {}",
-        config.indexer_grpc_data_service_address
-    );
-
-    if let Some(ref token) = config.auth_token {
-        if !token.is_empty() {
-            info!("Using auth token: {}***", &token[..token.len().min(8)]);
-        } else {
-            info!("No auth token (using public endpoint)");
-        }
-    } else {
-        info!("No auth token (using public endpoint)");
-    }
-
-    if let Some(start) = config.starting_version {
-        info!("Starting from version: {}", start);
-    }
-
-    if let Some(end) = config.ending_version {
-        info!("Ending at version: {}", end);
-    }
 
     run_processor(config).await
 }
