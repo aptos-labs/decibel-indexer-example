@@ -1,7 +1,8 @@
 [package]
 name = "decibel-indexer-example"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
+description = "Example indexer for Decibel DEX events on Aptos"
 
 [dependencies]
 anyhow = "1.0.75"
