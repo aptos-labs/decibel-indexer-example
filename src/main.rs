@@ -1,5 +1,7 @@
-mod event_parsing_utils;
+mod event;
+mod event_router;
 mod events;
+mod types;
 
 use anyhow::Result;
 use aptos_indexer_processor_sdk::{
@@ -13,7 +15,8 @@ use aptos_indexer_processor_sdk::{
 };
 use async_trait::async_trait;
 use clap::Parser;
-use event_parsing_utils::{classify_event_full, extract_events_from_transaction, KnownEvent};
+use event::extract_events_from_transaction;
+use event_router::{EventTypeKeys, KnownEvent};
 use std::path::PathBuf;
 use tracing::{info, Level};
 
@@ -35,32 +38,36 @@ struct Config {
     pub ending_version: Option<u64>,
     /// Package address to filter events for
     pub package_address: String,
-    /// Auth token for GRPC endpoint (required for staging/private endpoints)
+    /// Orderbook address (orders/bulk-orders use this, not package_address)
+    pub orderbook_address: String,
+    /// Auth token for gRPC endpoint (required for mainnet, optional for testnet)
     pub auth_token: Option<String>,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Self {
-            indexer_grpc_data_service_address: "https://grpc.netna.staging.aptoslabs.com:443"
-                .to_string(),
+            indexer_grpc_data_service_address: "https://grpc.testnet.aptoslabs.com:443".to_string(),
             starting_version: Some(0),
             ending_version: None,
-            package_address: "0xb8a5788314451ce4d2fbbad32e1bad88d4184b73943b7fe5166eab93cf1a5a95"
-                .to_string(),
+            package_address:
+                "0xe7da2794b1d8af76532ed95f38bfdf1136abfd8ea3a240189971988a83101b7f".to_string(),
+            orderbook_address:
+                "0xe7da2794b1d8af76532ed95f38bfdf1136abfd8ea3a240189971988a83101b7f".to_string(),
             auth_token: None,
         }
     }
 }
 
-// Simple processor that processes transactions directly
 pub struct DecibelProcessor {
-    pub package_addr: String,
+    keys: EventTypeKeys,
 }
 
 impl DecibelProcessor {
-    pub fn new(package_addr: String) -> Self {
-        Self { package_addr }
+    pub fn new(package_addr: &str, orderbook_addr: &str) -> Self {
+        Self {
+            keys: EventTypeKeys::new(package_addr, orderbook_addr),
+        }
     }
 }
 
@@ -74,8 +81,8 @@ impl Processable for DecibelProcessor {
         &mut self,
         transactions: TransactionContext<Vec<Transaction>>,
     ) -> Result<Option<TransactionContext<Self::Output>>, ProcessorError> {
-        match process_transactions(transactions.data, &self.package_addr) {
-            Ok(_) => Ok(Some(TransactionContext {
+        match process_transactions(transactions.data, &self.keys) {
+            Ok(()) => Ok(Some(TransactionContext {
                 data: (),
                 metadata: transactions.metadata,
             })),
@@ -112,7 +119,6 @@ async fn main() -> Result<()> {
 }
 
 async fn run_processor(config: Config) -> Result<()> {
-    // Create transaction stream configuration
     let transaction_stream_config = TransactionStreamConfig {
         indexer_grpc_data_service_address: config.indexer_grpc_data_service_address.parse()?,
         starting_version: config.starting_version,
@@ -128,7 +134,7 @@ async fn run_processor(config: Config) -> Result<()> {
         transaction_filter: None,
     };
 
-    let processor = DecibelProcessor::new(config.package_address.clone());
+    let processor = DecibelProcessor::new(&config.package_address, &config.orderbook_address);
     let transaction_stream = TransactionStreamStep::new(transaction_stream_config).await?;
 
     let (_, buffer_receiver) =
@@ -154,24 +160,199 @@ async fn run_processor(config: Config) -> Result<()> {
     Ok(())
 }
 
-fn process_transactions(transactions: Vec<Transaction>, package_addr: &str) -> Result<Vec<()>> {
-    // Add business logic to handle events.
+fn process_transactions(
+    transactions: Vec<Transaction>,
+    keys: &EventTypeKeys,
+) -> Result<()> {
+    // Add your business logic to handle events here.
+    // Each match arm gives you a parsed, typed event — plug in your storage, analytics, etc.
     for transaction in &transactions {
         let events = extract_events_from_transaction(transaction);
         for event in events {
-            match classify_event_full(&event, package_addr) {
-                KnownEvent::OrderEvent(_order) => {}
-                KnownEvent::TradeEvent(_trade) => {}
-                KnownEvent::MarketRegistrationEvent(_market) => {}
-                KnownEvent::PositionUpdateEvent(_position) => {}
-                KnownEvent::PriceUpdateEvent(_price) => {}
-                KnownEvent::CollateralBalanceChangeEvent(_collateral) => {}
-                KnownEvent::DexRegistrationEvent(_dex) => {}
-                KnownEvent::SubaccountCreatedEvent(_subaccount) => {}
+            match KnownEvent::from_event(&event, keys) {
+                KnownEvent::OrderEvent(order) => {
+                    info!(
+                        "Order: id={} user={} status={:?} market={}",
+                        order.order_id, order.user, order.status, order.market
+                    );
+                }
+                KnownEvent::BulkOrderUpdatedEvent(bulk) => {
+                    info!(
+                        "BulkOrderUpdated: market={} account={} seq={}",
+                        bulk.market, bulk.account, bulk.sequence_number
+                    );
+                }
+                KnownEvent::BulkOrderFillEvent(fill) => {
+                    info!(
+                        "BulkOrderFill: market={} account={} price={} fill_size={}",
+                        fill.market, fill.account, fill.price, fill.fill_size
+                    );
+                }
+                KnownEvent::BulkOrderRejectedEvent(rejected) => {
+                    info!(
+                        "BulkOrderRejected: market={} account={} seq={}",
+                        rejected.market, rejected.account, rejected.sequence_number
+                    );
+                }
+                KnownEvent::MarketUpdateEvent(market) => {
+                    info!(
+                        "MarketUpdate: name={} sz_decimals={} max_leverage={}",
+                        market.name, market.sz_decimals, market.max_leverage
+                    );
+                }
+                KnownEvent::PositionUpdateEvent(position) => {
+                    info!(
+                        "Position: user={} is_long={} size={} leverage={}",
+                        position.user, position.is_long, position.size, position.user_leverage
+                    );
+                }
+                KnownEvent::PriceUpdateEvent(price) => {
+                    info!(
+                        "Price: oracle={} mark={} impact_ask={} impact_bid={}",
+                        price.oracle_px, price.mark_px, price.impact_ask_px, price.impact_bid_px
+                    );
+                }
+                KnownEvent::CollateralBalanceChangeEvent(collateral) => {
+                    info!(
+                        "CollateralChange: delta={} change_type={:?}",
+                        collateral.delta, collateral.change_type
+                    );
+                }
+                KnownEvent::DexRegistrationEvent(dex) => {
+                    info!(
+                        "DexRegistration: decimals={}",
+                        dex.collateral_balance_decimals
+                    );
+                }
+                KnownEvent::SubaccountCreatedEvent(sub) => {
+                    info!(
+                        "SubaccountCreated: subaccount={} owner={} is_primary={:?}",
+                        sub.subaccount, sub.owner, sub.is_primary
+                    );
+                }
+                KnownEvent::SubaccountActiveChangedEvent(sub) => {
+                    info!(
+                        "SubaccountActiveChanged: subaccount={} is_active={:?}",
+                        sub.subaccount, sub.is_active
+                    );
+                }
+                KnownEvent::DelegationChangedEvent(delegation) => {
+                    info!(
+                        "DelegationChanged: subaccount={} delegated_account={}",
+                        delegation.subaccount, delegation.delegated_account
+                    );
+                }
+                KnownEvent::TradeEvent(trade) => {
+                    info!(
+                        "Trade: account={} action={:?} source={:?} size={} price={} pnl={} fee={}",
+                        trade.account,
+                        trade.action,
+                        trade.source,
+                        trade.size,
+                        trade.price,
+                        trade.realized_pnl,
+                        trade.fee
+                    );
+                }
+                KnownEvent::TwapEvent(twap) => {
+                    info!(
+                        "Twap: account={} is_buy={} status={:?}",
+                        twap.account, twap.is_buy, twap.status
+                    );
+                }
+                KnownEvent::OpenInterestUpdateEvent(oi) => {
+                    info!("OpenInterest: current={}", oi.current_open_interest);
+                }
+                KnownEvent::VaultCreatedEvent(vault) => {
+                    info!(
+                        "VaultCreated: name={} creator={}",
+                        vault.vault_name, vault.creator
+                    );
+                }
+                KnownEvent::VaultActivatedEvent(vault) => {
+                    info!("VaultActivated: shares={} nav={}", vault.num_shares, vault.nav);
+                }
+                KnownEvent::VaultAdminChangedEvent(vault) => {
+                    info!(
+                        "VaultAdminChanged: admin={} new_admin={}",
+                        vault.admin, vault.new_admin
+                    );
+                }
+                KnownEvent::ContributionEvent(contribution) => {
+                    info!(
+                        "Contribution: user={} assets={} shares={}",
+                        contribution.user,
+                        contribution.assets_contributed,
+                        contribution.shares_received
+                    );
+                }
+                KnownEvent::RedeemptionInitiatedEvent(redemption) => {
+                    info!(
+                        "RedemptionInitiated: user={} shares={}",
+                        redemption.user, redemption.shares_to_redeem
+                    );
+                }
+                KnownEvent::RedeemptionSettledEvent(redemption) => {
+                    info!(
+                        "RedemptionSettled: user={} shares={} assets={}",
+                        redemption.user, redemption.shares_redeemed, redemption.assets_received
+                    );
+                }
+                KnownEvent::FeeDistributionEvent(fee) => {
+                    info!(
+                        "FeeDistribution: recipient={} fee_amount={}",
+                        fee.fee_recipient, fee.current_fee_amount
+                    );
+                }
+                KnownEvent::GlobalVaultConfigUpdatedEvent(config) => {
+                    info!(
+                        "GlobalVaultConfigUpdated: max_fee_bps={}",
+                        config.max_fee_bps
+                    );
+                }
+                KnownEvent::MarketModeChangedEvent(mode) => {
+                    info!("MarketModeChanged: mode={:?}", mode.mode);
+                }
+                KnownEvent::LiquidationEvent(liq) => {
+                    info!(
+                        "Liquidation (deprecated): user={} type={:?}",
+                        liq.user, liq.liquidation_type
+                    );
+                }
+                KnownEvent::MarginCallLogEvent(mcl) => {
+                    info!(
+                        "MarginCallLog: account={} result={:?}",
+                        mcl.account, mcl.result
+                    );
+                }
+                KnownEvent::AckEvent(ack) => {
+                    info!("Ack: phase={:?} accounts={}", ack.ack_phase, ack.accounts.len());
+                }
+                KnownEvent::UsdcMintEvent(mint) => {
+                    info!("UsdcMint: account={} amount={}", mint.account, mint.amount);
+                }
+                KnownEvent::ReferralCodeRegisteredEvent(referral) => {
+                    let code = match &referral {
+                        events::ReferralCodeRegisteredEvent::V1(inner) => &inner.referral_code,
+                    };
+                    info!("ReferralCodeRegistered: code={}", code);
+                }
+                KnownEvent::ReferralRegisteredEvent(referral) => {
+                    let account = match &referral {
+                        events::ReferralRegisteredEvent::V1(inner) => &inner.referree_addr,
+                    };
+                    info!("ReferralRegistered: account={}", account);
+                }
+                KnownEvent::AffiliateRegisteredEvent(affiliate) => {
+                    let account = match &affiliate {
+                        events::AffiliateRegisteredEvent::V1(inner) => &inner.affiliate_addr,
+                    };
+                    info!("AffiliateRegistered: account={}", account);
+                }
                 KnownEvent::Unknown(_) => {}
             }
         }
     }
 
-    Ok(vec![(); transactions.len()])
+    Ok(())
 }

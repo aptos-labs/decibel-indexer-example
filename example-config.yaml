@@ -1,19 +1,26 @@
 # Decibel Indexer Example Configuration
+#
+# Copy this file and edit for your network:
+#   cp example-config.yaml config.yaml
 
-# Aptos node GRPC endpoint for streaming transactions
-indexer_grpc_data_service_address: "https://grpc.netna.staging.aptoslabs.com:443"
+# ── Testnet ──────────────────────────────────────────────────────────
+# Uncomment this section to index testnet events.
 
-# Starting version for indexing (optional, defaults to 0)
-# Set to null to start from the latest version
-starting_version: 0
-
-# Ending version for indexing (optional)
-# Leave null to run indefinitely
+indexer_grpc_data_service_address: "https://grpc.testnet.aptoslabs.com:443"
+starting_version: 8106081556
 ending_version: null
-
-# Package address to filter events for
-package_address: "0xb8a5788314451ce4d2fbbad32e1bad88d4184b73943b7fe5166eab93cf1a5a95"
-
-# Auth token for GRPC endpoint (required for staging/private endpoints)
-# Leave null or empty for public mainnet endpoint
+package_address: "0xe7da2794b1d8af76532ed95f38bfdf1136abfd8ea3a240189971988a83101b7f"
+orderbook_address: "0xe7da2794b1d8af76532ed95f38bfdf1136abfd8ea3a240189971988a83101b7f"
 auth_token: "your-auth-token-here"
+
+# ── Mainnet ──────────────────────────────────────────────────────────
+# Uncomment this section (and comment out testnet above) for mainnet.
+#
+# indexer_grpc_data_service_address: "https://grpc.mainnet.aptoslabs.com:443"
+# starting_version: 4365621793
+# ending_version: null
+# package_address: "0x50ead22afd6ffd9769e3b3d6e0e64a2a350d68e8b102c4e72e33d0b8cfdfdb06"
+# orderbook_address: "0x50ead22afd6ffd9769e3b3d6e0e64a2a350d68e8b102c4e72e33d0b8cfdfdb06"
+# auth_token: "your-auth-token-here"
+
+# Get your auth token at https://developers.aptoslabs.com/
